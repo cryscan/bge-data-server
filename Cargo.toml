@@ -1,0 +1,15 @@
+[package]
+edition = "2021"
+name = "bge-data-server"
+version = "0.1.0"
+
+[dependencies]
+anyhow = "*"
+axum = "0.7.5"
+glob = "0.3"
+itertools = "0.13"
+memmap2 = "0.9"
+serde = "1"
+serde-jsonlines = "0.5"
+tokio = { version = "1.38", features = ["full"] }
+web-rwkv = "0.8.11"
