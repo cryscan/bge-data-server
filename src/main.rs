@@ -27,10 +27,10 @@ impl DataItem {
     pub fn format(&self) -> Vec<String> {
         let mut prompts = Vec::with_capacity(self.pos.len() + self.neg.len());
         for prompt in &self.pos {
-            prompts.push(format!("{}\x16{}\x17+", prompt, self.query));
+            prompts.push(format!("{}\x16{}\x17+\0", prompt, self.query));
         }
         for prompt in &self.neg {
-            prompts.push(format!("{}\x16{}\x17-", prompt, self.query));
+            prompts.push(format!("{}\x16{}\x17-\0", prompt, self.query));
         }
         prompts
     }
