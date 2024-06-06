@@ -8,7 +8,9 @@ use axum::{
     routing::get,
     Json, Router,
 };
+use clap::{command, Parser};
 use itertools::Itertools;
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use web_rwkv::tokenizer::Tokenizer;
 
@@ -39,31 +41,38 @@ struct AppState {
     dataset: Arc<Vec<Vec<u16>>>,
 }
 
+#[derive(Parser, Debug, Clone)]
+#[command(author, version, about, long_about = None)]
+pub struct Args {
+    #[arg(long, short, value_name = "PATH")]
+    path: String,
+}
+
 fn main() -> Result<()> {
     let tokenizer = Tokenizer::new(include_str!("rwkv_vocab_v20230424.json"))?;
 
+    let args = Args::parse();
+
     let mut dataset = vec![];
-    let pattern = "../synthia/bge-m3-data/*/*.jsonl";
+    // let pattern = "../synthia/bge-m3-data/*/*.jsonl";
+    let pattern = &args.path;
     let total = glob::glob(pattern)?.count();
     for (id, path) in glob::glob(pattern)?.enumerate() {
         let Ok(path) = path else {
             continue;
         };
 
-        let mut text = vec![];
         let data: Vec<DataItem> = serde_jsonlines::json_lines(&path)?.try_collect()?;
-        for item in data {
-            let mut prompts = item.format();
-            text.append(&mut prompts);
-        }
+        let text: Vec<_> = data
+            .into_par_iter()
+            .map(|item| item.format())
+            .reduce(Vec::new, |x, y| [x, y].concat());
 
-        let mut tokens = Vec::with_capacity(text.len());
-        for prompt in text {
-            let prompt = tokenizer.encode(prompt.as_bytes())?;
-            if prompt.len() < MAX_LEN {
-                tokens.push(prompt);
-            }
-        }
+        let mut tokens: Vec<_> = text
+            .into_par_iter()
+            .filter_map(|prompt| tokenizer.encode(prompt.as_bytes()).ok())
+            .filter(|prompt| prompt.len() < MAX_LEN)
+            .collect();
 
         println!("{:?}\tdata: {}\t{}/{}", path, tokens.len(), id, total);
 
