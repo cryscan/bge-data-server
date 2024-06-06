@@ -1,1 +1,1 @@
-cargo r -r -- -p ../synthia/bge-m3-data/*/*.jsonl
+cargo r -r -- -p ../synthia/bge-m3-cherrypick/**/*.jsonl

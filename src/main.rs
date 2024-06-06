@@ -41,6 +41,11 @@ struct AppState {
     dataset: Arc<Vec<Vec<u16>>>,
 }
 
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+struct DataItemQuery {
+    idx: usize,
+}
+
 #[derive(Parser, Debug, Clone)]
 #[command(author, version, about, long_about = None)]
 pub struct Args {
@@ -56,13 +61,16 @@ fn main() -> Result<()> {
     let mut dataset = vec![];
     // let pattern = "../synthia/bge-m3-data/*/*.jsonl";
     let pattern = &args.path;
-    let total = glob::glob(pattern)?.count();
-    for (id, path) in glob::glob(pattern)?.enumerate() {
-        let Ok(path) = path else {
-            continue;
-        };
 
+    let paths = glob::glob(pattern)?.collect_vec();
+    let paths = paths.into_iter().filter_map(|x| x.ok()).collect_vec();
+    println!("{:#?}", paths);
+
+    let total = paths.len();
+    for (id, path) in paths.into_iter().enumerate() {
         let data: Vec<DataItem> = serde_jsonlines::json_lines(&path)?.try_collect()?;
+        println!("{:?}\tdata: {}\t{}/{}", path, data.len(), id, total);
+
         let text: Vec<_> = data
             .into_par_iter()
             .map(|item| item.format())
@@ -73,8 +81,6 @@ fn main() -> Result<()> {
             .filter_map(|prompt| tokenizer.encode(prompt.as_bytes()).ok())
             .filter(|prompt| prompt.len() < MAX_LEN)
             .collect();
-
-        println!("{:?}\tdata: {}\t{}/{}", path, tokens.len(), id, total);
 
         dataset.append(&mut tokens);
     }
@@ -95,6 +101,8 @@ async fn axum_main(dataset: Vec<Vec<u16>>) {
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:9961").await.unwrap();
+    println!("server started");
+
     axum::serve(listener, app).await.unwrap();
 }
 
@@ -103,10 +111,10 @@ async fn dataset_len(State(state): State<AppState>) -> impl IntoResponse {
 }
 
 async fn dataset_item(
-    Query(index): Query<usize>,
+    Query(query): Query<DataItemQuery>,
     State(state): State<AppState>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    match state.dataset.iter().nth(index) {
+    match state.dataset.iter().nth(query.idx) {
         Some(data) => Ok(Json(data.clone())),
         None => Err(StatusCode::NOT_FOUND),
     }
