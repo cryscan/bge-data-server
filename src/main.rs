@@ -76,14 +76,36 @@ fn main() -> Result<()> {
             .map(|item| item.format())
             .reduce(Vec::new, |x, y| [x, y].concat());
 
-        let mut tokens: Vec<_> = text
+        let tokens: Vec<_> = text
             .into_par_iter()
             .filter_map(|prompt| tokenizer.encode(prompt.as_bytes()).ok())
             .filter(|prompt| prompt.len() < MAX_LEN)
             .collect();
 
-        dataset.append(&mut tokens);
+        let mut padded = vec![];
+        let mut start = 0usize;
+        for data in tokens {
+            let end = start + data.len();
+            let buffer = match (padded.last_mut(), end <= MAX_LEN) {
+                (Some(buffer), true) => buffer,
+                (None, _) | (_, false) => {
+                    start = 0;
+                    padded.push(vec![0u16; MAX_LEN]);
+                    padded.last_mut().unwrap()
+                }
+            };
+
+            let end = start + data.len();
+            buffer[start..end].copy_from_slice(&data);
+            start = end;
+
+            assert_eq!(buffer.len(), MAX_LEN);
+        }
+
+        dataset.append(&mut padded);
     }
+
+    println!("dataset size: {}", dataset.len());
 
     axum_main(dataset);
 
